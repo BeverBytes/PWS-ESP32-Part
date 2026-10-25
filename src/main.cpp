@@ -11,12 +11,11 @@ HardwareSerial GR = Serial1;
 
 JaevanProtocol Jaevan;
 
-void handlePacket(const JaevanPacket& p, const JaevanProtocol::Direction& d) {
-  if ((p.command == DataCommand) || (p.command == MandelbrotCommand)) {
-    switch (d){
-      case (JaevanProtocol::Direction::None):
+void sendPacket(const JaevanPacket& p, const JaevanProtocol::Direction& d) {
+  switch (d) {
+    case (JaevanProtocol::Direction::None):
         break;
-      case (JaevanProtocol::Direction::fromUSB):
+    case (JaevanProtocol::Direction::toGR):
         GRUARTbusy = true;
         GR.write(p.sync1);
         GR.write(p.sync2);
@@ -29,7 +28,7 @@ void handlePacket(const JaevanPacket& p, const JaevanProtocol::Direction& d) {
         GR.write(p.checksumB);
         GRUARTbusy = false;
         break;
-      case (JaevanProtocol::Direction::fromGR):
+    case (JaevanProtocol::Direction::toUSB):
         USBUARTbusy = true;
         USB.write(p.sync1);
         USB.write(p.sync2);
@@ -42,9 +41,20 @@ void handlePacket(const JaevanPacket& p, const JaevanProtocol::Direction& d) {
         USB.write(p.checksumB);
         USBUARTbusy = false;
         break;
-    };
+    default:
+        break;
+  };
+  return;
+}
+
+void handlePacket(const JaevanPacket& p, const JaevanProtocol::Direction& d) {
+  if (d == JaevanProtocol::Direction::toESP) {
+    // handle packets
     return;
+  } else {
+    sendPacket(p, d);
   }
+  return;
 }
 
 hw_timer_t *utilisationTimer = NULL;
@@ -57,6 +67,14 @@ void utilisationDiagnostic() {
     p.command = ESPdiagCommand;
     p.dataLength = 5;
     p.data[0] = UtilisationKey;
+    float Utilisation = 0.0f; //TODO calculate utilistation
+    uint8_t *rewrite;
+    rewrite = reinterpret_cast<uint8_t*>(&Utilisation);
+    for (int i = 0; i <= sizeof(rewrite); i++) {
+      p.data[i+1] = rewrite[i];
+    }
+    sendPacket(p, JaevanProtocol::Direction::toUSB);
+
 
   } else {
     QueueDiagnostic = true;
@@ -87,10 +105,10 @@ void loop() {
   uint16_t USBRXbufferIndex = 0;
   uint16_t GRRXbufferIndex = 0;
   while (USB.available() > 0) {
-    Jaevan.parseByte(USB.read(), JaevanProtocol::fromUSB);
+    Jaevan.parseByte(USB.read());
   }
 
   while (GR.available() > 0) {
-    Jaevan.parseByte(GR.read(), JaevanProtocol::fromGR);
+    Jaevan.parseByte(GR.read());
   }
 }

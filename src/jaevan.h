@@ -16,6 +16,7 @@ const uint8_t MandelbrotCommand = 0x04;
 struct JaevanPacket {
     uint8_t sync1;              // Start bytes (0xAB, 0xCD)
     uint8_t sync2;              // Start bytes (0xAB, 0xCD)
+    uint8_t destination;
     uint8_t command;         // Command byte
     uint16_t dataLength;     // Length of the data payload
     uint8_t data[1023];      // Data payload (up to 1023 bytes)
@@ -32,18 +33,19 @@ struct Checksum {
 
 class JaevanProtocol {
     public:
-        enum Direction {fromUSB, fromGR, None};
+        enum Direction {None, toUSB, toGR, toESP};
         void onPacket(void (*cb)(const JaevanPacket&, const Direction&));
         JaevanProtocol();
-        void parseByte(uint8_t b, Direction d);
+        void parseByte(uint8_t b);
 
     private:
-        enum State {Sync1, Sync2, Command, Length1, Length2, Payload, ChecksumA, ChecksumB};
+        enum State {Sync1, Sync2, Destination, Command, Length1, Length2, Payload, ChecksumA, ChecksumB};
 
         State state;
         uint16_t bytesRead;         // bytes Read counter
         uint8_t sync1;              // Start bytes (0xAB, 0xCD)
         uint8_t sync2;              // Start bytes (0xAB, 0xCD)
+        uint8_t destination;
         uint8_t command;            // Command byte
         uint16_t dataLength;        // Length of the data payload
         uint8_t dataBuffer[1023];   // Data payload (up to 1023 bytes)
@@ -70,3 +72,4 @@ class JaevanProtocol {
 
 // ESP32 Diagnostic:
 //     UtilisationKey = 0xB7
+

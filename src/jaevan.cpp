@@ -46,8 +46,7 @@ void JaevanProtocol::dispatchPacket() {
     return;
 }
 
-void JaevanProtocol::parseByte(uint8_t b, Direction dir) {
-    d = dir;
+void JaevanProtocol::parseByte(uint8_t b) {
     switch (state) {
         case (Sync1):
             if (b == 0xAB) {
@@ -56,10 +55,22 @@ void JaevanProtocol::parseByte(uint8_t b, Direction dir) {
             break;
         case (Sync2):
             if (b == 0xCD) {
-                state = Command;
+                state = Destination;
             } else {
                 state = Sync1; // Reset if not correct
             }
+            break;
+        case (Destination):
+            if (b == 0x01) {
+                d = toUSB;
+            } else if (b == 0x02) {
+                d = toESP;
+            } else if (b == 0x03) {
+                d = toGR;
+            } else {
+                d = None;
+            }
+            state = Command;
             break;
         case (Command):
             if (b == 0x01 || b == 0x02 || b == 0x03) {

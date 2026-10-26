@@ -34,9 +34,10 @@ struct Checksum {
 class JaevanProtocol {
     public:
         enum Direction {None, toUSB, toGR, toESP};
-        void onPacket(void (*cb)(const JaevanPacket&, const Direction&));
+        void onPacket(void (*cb)(const JaevanPacket&));
         JaevanProtocol();
         void parseByte(uint8_t b);
+        Checksum calculateChecksumPacket(const JaevanPacket&);
 
     private:
         enum State {Sync1, Sync2, Destination, Command, Length1, Length2, Payload, ChecksumA, ChecksumB};
@@ -49,13 +50,13 @@ class JaevanProtocol {
         uint8_t command;            // Command byte
         uint16_t dataLength;        // Length of the data payload
         uint8_t dataBuffer[1023];   // Data payload (up to 1023 bytes)
+        JaevanPacket packet;
         uint8_t checksumA;          // Checksum for error detection
         uint8_t checksumB;          // Checksum for error detection
-        Direction d;
 
         Checksum calculateChecksum();
         void dispatchPacket();
-        void (*packetCallback)(const JaevanPacket&, const Direction&) = nullptr;
+        void (*packetCallback)(const JaevanPacket&) = nullptr;
 };
 #endif // JAEVAN_H
 
@@ -72,4 +73,3 @@ class JaevanProtocol {
 
 // ESP32 Diagnostic:
 //     UtilisationKey = 0xB7
-

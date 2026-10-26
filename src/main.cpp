@@ -4,24 +4,26 @@
 
 bool USBUARTbusy = false;
 bool GRUARTbusy = false;
-bool QueueDiagnostic = false;
+volatile bool diagnosticPending = false;
 
 HWCDC USB = Serial;
 HardwareSerial GR = Serial1;
 
 JaevanProtocol Jaevan;
 
-void sendPacket(const JaevanPacket& p, const JaevanProtocol::Direction& d) {
-  switch (d) {
+void sendPacket(const JaevanPacket& p) {
+  switch (p.destination) {
     case (JaevanProtocol::Direction::None):
         break;
     case (JaevanProtocol::Direction::toGR):
         GRUARTbusy = true;
         GR.write(p.sync1);
         GR.write(p.sync2);
+        GR.write(0x03);
         GR.write(p.command);
-        GR.write(p.dataLength);
-        for (int i = 0; i <= p.dataLength; i++) {
+        GR.write((p.dataLength >> 8) & 0xFF);
+        GR.write(p.dataLength & 0xFF);
+        for (int i = 0; i < p.dataLength; i++) {
           GR.write(p.data[i]);
         }
         GR.write(p.checksumA);
@@ -32,9 +34,11 @@ void sendPacket(const JaevanPacket& p, const JaevanProtocol::Direction& d) {
         USBUARTbusy = true;
         USB.write(p.sync1);
         USB.write(p.sync2);
+        USB.write(0x01);
         USB.write(p.command);
-        USB.write(p.dataLength);
-        for (int i = 0; i <= p.dataLength; i++) {
+        USB.write((p.dataLength >> 8) & 0xFF);
+        USB.write(p.dataLength & 0xFF);
+        for (int i = 0; i < p.dataLength; i++) {
           USB.write(p.data[i]);
         }
         USB.write(p.checksumA);
@@ -47,39 +51,39 @@ void sendPacket(const JaevanPacket& p, const JaevanProtocol::Direction& d) {
   return;
 }
 
-void handlePacket(const JaevanPacket& p, const JaevanProtocol::Direction& d) {
-  if (d == JaevanProtocol::Direction::toESP) {
+void handlePacket(const JaevanPacket& p) {
+  if (p.destination == JaevanProtocol::Direction::toESP) {
     // handle packets
     return;
   } else {
-    sendPacket(p, d);
+    sendPacket(p);
   }
   return;
 }
 
 hw_timer_t *utilisationTimer = NULL;
 
+void ARDUINO_ISR_ATTR queueUtilisationDiagnostic() {
+  diagnosticPending = true;
+}
+
 void utilisationDiagnostic() {
-  if (!USBUARTbusy) {
-    JaevanPacket p;
-    p.sync1 = SYNC1;
-    p.sync2 = SYNC2;
-    p.command = ESPdiagCommand;
-    p.dataLength = 5;
-    p.data[0] = UtilisationKey;
-    float Utilisation = 0.0f; //TODO calculate utilistation
-    uint8_t *rewrite;
-    rewrite = reinterpret_cast<uint8_t*>(&Utilisation);
-    for (int i = 0; i <= sizeof(rewrite); i++) {
-      p.data[i+1] = rewrite[i];
-    }
-    sendPacket(p, JaevanProtocol::Direction::toUSB);
-
-
-  } else {
-    QueueDiagnostic = true;
+  static JaevanPacket p;
+  p.sync1 = SYNC1;
+  p.sync2 = SYNC2;
+  p.destination = JaevanProtocol::Direction::toUSB;
+  p.command = ESPdiagCommand;
+  p.dataLength = 5;
+  p.data[0] = UtilisationKey;
+  float utilisation = 0.0f; // TODO: calculate utilisation
+  const uint8_t *bytes = reinterpret_cast<const uint8_t*>(&utilisation);
+  for (size_t i = 0; i < sizeof(utilisation); i++) {
+    p.data[i + 1] = bytes[i];
   }
-  return;
+  Checksum checksum = Jaevan.calculateChecksumPacket(p);
+  p.checksumA = checksum.A;
+  p.checksumB = checksum.B;
+  sendPacket(p);
 }
 
 byte USBreadBuffer[1030];
@@ -95,15 +99,18 @@ void setup() {
 
   // ESP32 Utilisation calculation
   utilisationTimer = timerBegin(1000000);
-  timerAttachInterrupt(utilisationTimer, &utilisationDiagnostic);
+  timerAttachInterrupt(utilisationTimer, &queueUtilisationDiagnostic);
   timerAlarm(utilisationTimer, 1000000, true, 0);
 
   Jaevan.onPacket(handlePacket);
 }
 
 void loop() {
-  uint16_t USBRXbufferIndex = 0;
-  uint16_t GRRXbufferIndex = 0;
+  if (diagnosticPending && !USBUARTbusy) {
+    diagnosticPending = false;
+    utilisationDiagnostic();
+  }
+
   while (USB.available() > 0) {
     Jaevan.parseByte(USB.read());
   }

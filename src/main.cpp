@@ -95,7 +95,7 @@ void setup() {
   USB.setTxBufferSize(1130);
   GR.setTxBufferSize(1130);
   USB.begin(230400);
-  GR.begin(115200, SERIAL_8E1, 20, 21, true, 11000UL);
+  GR.begin(115200, SERIAL_8E1, 20, 21);
 
   // ESP32 Utilisation calculation
   utilisationTimer = timerBegin(1000000);

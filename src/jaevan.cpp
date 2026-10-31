@@ -89,7 +89,7 @@ void JaevanProtocol::parseByte(uint8_t b) {
             state = Command;
             break;
         case (Command):
-            if (b == 0x01 || b == 0x02 || b == 0x03 || b == 0x04) {
+            if (b == 0x01 || b == 0x02 || b == 0x03 || b == 0x04 || b == 0x05) {
                 command = b;
                 state = Length1;
             } else {

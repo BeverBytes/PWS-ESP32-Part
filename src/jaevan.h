@@ -11,6 +11,7 @@ const uint8_t DataCommand = 0x01;
 const uint8_t GRdiagCommand = 0x02;
 const uint8_t ESPdiagCommand = 0x03;
 const uint8_t MandelbrotCommand = 0x04;
+const uint8_t JuliaCommand = 0x05;
 
 #pragma pack(push, 1)
 struct JaevanPacket {
